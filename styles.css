@@ -1608,6 +1608,35 @@ svg {
   justify-content: flex-end;
 }
 
+.setting-row.column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.setting-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: rgba(251, 248, 240, 0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  font-family: inherit;
+  color: var(--ink);
+  -webkit-appearance: none;
+}
+
+.setting-input::placeholder {
+  color: var(--faint);
+}
+
+.setting-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(162, 51, 43, 0.09);
+}
+
 .mini-chip {
   border: 1px solid var(--line);
   background: var(--surface-2);

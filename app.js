@@ -174,7 +174,12 @@
         minRR: 2,
         maxPosition: 30,
         defaultTranche: "third",
-        defaultAddRule: "none"
+        defaultAddRule: "none",
+        commonSymbols: {
+          stock: [],
+          etf: ["科创50ETF", "创业板ETF", "沪深300ETF"],
+          option: ["科创50ETF", "创业板ETF", "沪深300ETF"]
+        }
       },
       plans: [],
       reviews: [],
@@ -268,6 +273,20 @@
     }
   }
 
+  function normalizeSymbolList(list) {
+    if (!Array.isArray(list)) return [];
+    return [...new Set(list.filter((s) => typeof s === "string").map((s) => s.trim().slice(0, 24)).filter(Boolean))];
+  }
+
+  function normalizeSymbolMap(value) {
+    const map = value && typeof value === "object" ? value : {};
+    return {
+      stock: normalizeSymbolList(map.stock),
+      etf: normalizeSymbolList(map.etf),
+      option: normalizeSymbolList(map.option)
+    };
+  }
+
   function normalizeState(data) {
     const base = createDefaultState();
     if (!data || typeof data !== "object") return base;
@@ -282,7 +301,8 @@
         minRR: Number(settings.minRR) || 2,
         maxPosition: Number(settings.maxPosition) || 30,
         defaultTranche: FIRST_TRANCHE[settings.defaultTranche] ? settings.defaultTranche : "third",
-        defaultAddRule: ADD_RULES[settings.defaultAddRule] ? settings.defaultAddRule : "none"
+        defaultAddRule: ADD_RULES[settings.defaultAddRule] ? settings.defaultAddRule : "none",
+        commonSymbols: settings.commonSymbols === undefined ? base.settings.commonSymbols : normalizeSymbolMap(settings.commonSymbols)
       },
       plans: plans.filter(Boolean).map(normalizePlan).filter(Boolean),
       reviews: reviews.filter(Boolean)
@@ -1193,6 +1213,20 @@
       </section>
 
       <section class="settings-card">
+        <h3>常用标的</h3>
+        <p>新建计划第一步点一下就能填入。按资产类别分别维护，用逗号、顿号或空格分隔，数量不限。</p>
+        ${["stock", "etf", "option"].map((key) => `
+          <div class="setting-row column">
+            <div>
+              <div class="setting-label">${ASSET_TYPES[key].label}</div>
+              <div class="setting-desc">${key === "option" ? "期权对应的标的 ETF" : "经常交易的对象"}</div>
+            </div>
+            <input class="setting-input" data-symbols="${key}" value="${escapeHTML(DB.settings.commonSymbols[key].join(", "))}" placeholder="如 ${key === "stock" ? "贵州茅台, 宁德时代" : "科创50ETF, 创业板ETF"}" autocomplete="off">
+          </div>
+        `).join("")}
+      </section>
+
+      <section class="settings-card">
         <h3>数据</h3>
         <p>当前有 ${completed} 笔执行记录、${pending} 份待执行计划、${DB.reviews.length} 次周期复盘。</p>
         <div class="data-actions">
@@ -1345,6 +1379,7 @@
     let footer = "";
 
     if (step === 1) {
+      const symbolList = (DB.settings.commonSymbols && DB.settings.commonSymbols[draft.assetType]) || [];
       body = `
         ${steps}
         <div class="sheet-intro">
@@ -1368,6 +1403,14 @@
           <div class="field-label">标的名或代码 <span>不必写价格</span></div>
           <input id="plan-symbol" data-plan-field="symbol" value="${escapeHTML(draft.symbol)}" placeholder="如 510300 / 贵州茅台" maxlength="24" autocomplete="off" autocapitalize="characters">
         </div>
+
+        ${symbolList.length ? `
+        <div class="field">
+          <div class="field-label">常用${ASSET_TYPES[draft.assetType].label} <span>点一下填入，可在设置里维护</span></div>
+          <div class="chip-grid">
+            ${symbolList.map((symbol) => `<button class="chip ${draft.symbol === symbol ? "active" : ""}" data-action="plan-symbol" data-value="${escapeHTML(symbol)}">${escapeHTML(symbol)}</button>`).join("")}
+          </div>
+        </div>` : ""}
 
         <div class="field">
           <div class="field-label">方向</div>
@@ -2574,6 +2617,16 @@
         UI.planDraft.assetType = actionElement.dataset.value;
         renderSheet(true);
         break;
+      case "plan-symbol":
+        UI.planDraft.symbol = actionElement.dataset.value;
+        {
+          const input = $("#plan-symbol");
+          if (input) input.value = UI.planDraft.symbol;
+          $$('#sheet-body [data-action="plan-symbol"]').forEach((el) => {
+            el.classList.toggle("active", el.dataset.value === UI.planDraft.symbol);
+          });
+        }
+        break;
       case "plan-direction":
         UI.planDraft.direction = actionElement.dataset.value;
         renderSheet(true);
@@ -2701,6 +2754,25 @@
     }
   }
 
+  function parseSymbolInput(value) {
+    return [...new Set(String(value || "")
+      .split(/[,，、;；\s\n]+/)
+      .map((s) => s.trim().slice(0, 24))
+      .filter(Boolean))];
+  }
+
+  function handleSettingsChange(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const key = target.dataset.symbols;
+    if (!key || !ASSET_TYPES[key]) return;
+    const list = parseSymbolInput(target.value);
+    DB.settings.commonSymbols[key] = list;
+    saveState();
+    target.value = list.join(", ");
+    toast(`${ASSET_TYPES[key].label}常用标的已更新（${list.length} 个）`);
+  }
+
   function handleSheetInput(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -2783,6 +2855,7 @@
       if (body) UI.sheetScrollTop = body.scrollTop;
     });
     $("#sheet-backdrop").addEventListener("click", closeSheet);
+    $("#view-settings").addEventListener("change", handleSettingsChange);
     $("#import-input").addEventListener("change", (event) => {
       const file = event.target.files && event.target.files[0];
       handleImportFile(file);
