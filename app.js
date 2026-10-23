@@ -159,7 +159,8 @@
     unplannedDraft: null,
     reviewDraft: null,
     confirmCallback: null,
-    lastFocus: null
+    lastFocus: null,
+    sheetScrollTop: 0
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -2741,6 +2742,8 @@
       const index = Number(target.dataset.planCheck);
       UI.planDraft.checks[index] = target.checked;
       updatePlanCheckUI();
+      const body = $("#sheet-body");
+      if (body && Number.isFinite(UI.sheetScrollTop)) body.scrollTop = UI.sheetScrollTop;
     }
   }
 
@@ -2775,6 +2778,10 @@
     document.addEventListener("click", handleClick);
     $("#sheet-body").addEventListener("input", handleSheetInput);
     $("#sheet-body").addEventListener("change", handleSheetChange);
+    $("#sheet-body").addEventListener("pointerdown", () => {
+      const body = $("#sheet-body");
+      if (body) UI.sheetScrollTop = body.scrollTop;
+    });
     $("#sheet-backdrop").addEventListener("click", closeSheet);
     $("#import-input").addEventListener("change", (event) => {
       const file = event.target.files && event.target.files[0];

@@ -2201,6 +2201,7 @@ svg {
 }
 
 .check-toggle {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -2217,6 +2218,11 @@ svg {
 
 .check-toggle input {
   position: absolute;
+  top: 11px;
+  left: 11px;
+  width: 19px;
+  height: 19px;
+  margin: 0;
   opacity: 0;
   pointer-events: none;
 }
