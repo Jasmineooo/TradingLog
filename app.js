@@ -4,6 +4,47 @@
   const STORAGE_KEY = "shouze.trading.journal.v1";
   const APP_VERSION = "1.0.0";
 
+  // 数据保护：读取异常时保留原始副本并拒绝写入，避免覆盖已有计划与复盘
+  const DataGuard = (function () {
+    const blocked = {};
+    let bannerShown = false;
+    function rescue(key, raw) {
+      try {
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        localStorage.setItem("__rescue." + key + "." + stamp, raw);
+      } catch (e) {}
+    }
+    function paint() {
+      if (document.getElementById("__data_guard_banner")) return;
+      const el = document.createElement("div");
+      el.id = "__data_guard_banner";
+      el.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#8f1d1d;" +
+        "color:#fff;font:13px/1.6 -apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;" +
+        "padding:10px 14px;box-shadow:0 2px 10px rgba(0,0,0,.35)";
+      el.textContent = "数据读取异常：原始数据已另存副本，本次不会写入。请到「数据备份中心」恢复后再使用。";
+      document.body.appendChild(el);
+    }
+    function showBanner() {
+      if (bannerShown) return;
+      bannerShown = true;
+      if (document.body) paint();
+      else document.addEventListener("DOMContentLoaded", paint);
+    }
+    function markBroken(key, raw) {
+      rescue(key, raw);
+      blocked[key] = true;
+      showBanner();
+    }
+    function read(key) {
+      let raw = null;
+      try { raw = localStorage.getItem(key); } catch (e) { return { ok: true, raw: null, value: null }; }
+      if (raw === null) return { ok: true, raw: null, value: null };
+      try { return { ok: true, raw: raw, value: JSON.parse(raw) }; }
+      catch (e) { markBroken(key, raw); return { ok: false, raw: raw, value: null }; }
+    }
+    return { read: read, markBroken: markBroken, canWrite: function (key) { return !blocked[key]; } };
+  })();
+
   const ASSET_TYPES = {
     stock: { label: "个股", short: "股", cls: "stock" },
     etf: { label: "ETF", short: "ETF", cls: "etf" },
@@ -262,13 +303,14 @@
   }
 
   function loadState() {
+    const read = DataGuard.read(STORAGE_KEY);
+    if (!read.ok) return createDefaultState();
+    if (read.value === null) return createDefaultState();
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return createDefaultState();
-      const parsed = JSON.parse(raw);
-      return normalizeState(parsed);
+      return normalizeState(read.value);
     } catch (error) {
       console.warn("无法读取本地数据", error);
+      DataGuard.markBroken(STORAGE_KEY, read.raw);
       return createDefaultState();
     }
   }
@@ -332,6 +374,7 @@
   }
 
   function saveState() {
+    if (!DataGuard.canWrite(STORAGE_KEY)) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
     } catch (error) {
